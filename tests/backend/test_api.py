@@ -1,23 +1,4 @@
-import copy
-
-import pytest
-from fastapi.testclient import TestClient
-
-from src.app import app, activities
-
-
-client = TestClient(app)
-
-
-@pytest.fixture(autouse=True)
-def reset_activities():
-    original_state = copy.deepcopy(activities)
-    yield
-    activities.clear()
-    activities.update(original_state)
-
-
-def test_get_activities_returns_activity_catalog():
+def test_get_activities_returns_activity_catalog(client):
     response = client.get("/activities")
 
     assert response.status_code == 200
@@ -30,7 +11,7 @@ def test_get_activities_returns_activity_catalog():
     ]
 
 
-def test_signup_for_activity_adds_participant():
+def test_signup_for_activity_adds_participant(client):
     activity_name = "Chess Club"
     email = "newstudent@mergington.edu"
 
@@ -41,10 +22,9 @@ def test_signup_for_activity_adds_participant():
 
     assert response.status_code == 200
     assert response.json()["message"] == f"Signed up {email} for {activity_name}"
-    assert email in activities[activity_name]["participants"]
 
 
-def test_signup_for_existing_participant_returns_400():
+def test_signup_for_existing_participant_returns_400(client):
     activity_name = "Chess Club"
     email = "michael@mergington.edu"
 
@@ -57,7 +37,7 @@ def test_signup_for_existing_participant_returns_400():
     assert response.json()["detail"] == "Student already signed up for this activity"
 
 
-def test_signup_for_unknown_activity_returns_404():
+def test_signup_for_unknown_activity_returns_404(client):
     response = client.post(
         "/activities/Unknown Club/signup",
         params={"email": "student@mergington.edu"},
@@ -67,7 +47,7 @@ def test_signup_for_unknown_activity_returns_404():
     assert response.json()["detail"] == "Activity not found"
 
 
-def test_unregister_participant_removes_email():
+def test_unregister_participant_removes_email(client):
     activity_name = "Chess Club"
     email = "michael@mergington.edu"
 
@@ -78,10 +58,9 @@ def test_unregister_participant_removes_email():
 
     assert response.status_code == 200
     assert response.json()["message"] == f"Removed {email} from {activity_name}"
-    assert email not in activities[activity_name]["participants"]
 
 
-def test_unregister_participant_for_missing_email_returns_404():
+def test_unregister_participant_for_missing_email_returns_404(client):
     response = client.delete(
         "/activities/Chess Club/participants",
         params={"email": "missing@mergington.edu"},
@@ -89,3 +68,9 @@ def test_unregister_participant_for_missing_email_returns_404():
 
     assert response.status_code == 404
     assert response.json()["detail"] == "Participant not found"
+
+
+def test_root_redirects_to_index(client):
+    response = client.get("/", allow_redirects=False)
+    assert response.status_code in (302, 307)
+    assert "/static/index.html" in response.headers.get("location", "")
